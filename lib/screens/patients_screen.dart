@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'package:fl_chart/fl_chart.dart';
+import 'settings_screen.dart';
+import 'login_screen.dart';
 
 class PatientsScreen extends StatefulWidget {
   @override
@@ -183,7 +186,90 @@ class PatientDetailsScreen extends StatelessWidget {
             Text("Height: ${patient["height"]}"),
             Text("Weight: ${patient["weight"]}"),
             Text("Caregiver Contact: ${patient["caregiver"]}"),
-            Text("RFID Mac Address: ${patient["rfid"]}"),
+            Text("Device Mac Address: ${patient["rfid"]}"),
+
+            // Heart Rate Title
+            Text(
+              "Heart Rate (BPM)",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 10),
+
+            // Heart Rate Graph
+            Container(
+              height: 250,
+              padding: EdgeInsets.symmetric(horizontal: 10),
+              child: LineChart(
+                LineChartData(
+                  gridData: FlGridData(
+                    show: true,
+                    drawVerticalLine: true,
+                    getDrawingHorizontalLine: (value) {
+                      return FlLine(color: Colors.grey.shade300, strokeWidth: 0.5);
+                    },
+                    getDrawingVerticalLine: (value) {
+                      return FlLine(color: Colors.grey.shade300, strokeWidth: 0.5);
+                    },
+                  ),
+                  titlesData: FlTitlesData(
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 40,
+                        getTitlesWidget: (value, meta) {
+                          return Text(
+                            value.toInt().toString(),
+                            style: TextStyle(fontSize: 10),
+                          );
+                        },
+                      ),
+                    ),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 22,
+                        getTitlesWidget: (value, meta) {
+                          return Text(
+                            value.toInt().toString(),
+                            style: TextStyle(fontSize: 10),
+                          );
+                        },
+                      ),
+                    ),
+                    rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  ),
+                  borderData: FlBorderData(
+                    show: true,
+                    border: Border.all(color: Colors.black, width: 1),
+                  ),
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: [
+                        FlSpot(0, 100), FlSpot(1, 105), FlSpot(2, 110),
+                        FlSpot(3, 120), FlSpot(4, 140), FlSpot(5, 130),
+                        FlSpot(6, 140), FlSpot(7, 120), FlSpot(8, 110),
+                        FlSpot(9, 110), FlSpot(10, 105), FlSpot(11, 110),
+                        FlSpot(12, 100), FlSpot(13, 105), FlSpot(14, 110),
+                        FlSpot(15, 120), FlSpot(16, 140), FlSpot(17, 130),
+                        FlSpot(18, 140), FlSpot(19, 120), FlSpot(20, 110),
+                        FlSpot(21, 110), FlSpot(22, 105), FlSpot(23, 110),
+                        FlSpot(24, 110), FlSpot(25, 105), FlSpot(26, 110),
+                        FlSpot(27, 100), FlSpot(28, 105), FlSpot(29, 110),
+                        FlSpot(30, 120), FlSpot(31, 140), FlSpot(32, 130),
+                        FlSpot(33, 140), FlSpot(34, 120), FlSpot(35, 110),
+                        FlSpot(36, 110), FlSpot(37, 105), FlSpot(38, 110),
+                      ],
+                      isCurved: true,
+                      color: Colors.red,
+                      barWidth: 3,
+                      isStrokeCapRound: true,
+                      belowBarData: BarAreaData(show: false),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),
