@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'dart:async';
+import 'package:fl_chart/fl_chart.dart';
+import 'dart:math';
 import 'settings_screen.dart';
 import 'login_screen.dart';
-import 'package:fl_chart/fl_chart.dart';
-import 'dart:math'; // for Random()
 
 class CaregiverDashboard extends StatefulWidget {
   final Function(bool) onThemeChanged;
@@ -17,22 +19,41 @@ class CaregiverDashboard extends StatefulWidget {
 }
 
 class _CaregiverDashboardState extends State<CaregiverDashboard> {
+  // Patients list
   List<Map<String, String>> patients = [];
+  // Logged-in user
   String loggedInUser = "";
-
-  // Define subscriptionPlan so it is no longer undefined
+  // Subscription plan (Free, Premium, Enterprise)
   String subscriptionPlan = "Free";
+
+  // For beacon status fetching
+  String serverIp = "192.168.61.162"; // Replace with your Raspberry Pi's IP
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
     _loadPatients();
+    // Fetch beacon data on load
+    fetchBeaconStatus();
+    // Auto-refresh every 1 second
+    _timer = Timer.periodic(Duration(seconds: 1), (timer) {
+      fetchBeaconStatus();
+    });
   }
 
+  @override
+  void dispose() {
+    _timer?.cancel(); // Stop the timer
+    super.dispose();
+  }
+
+  /// Loads saved patient data from SharedPreferences
   Future<void> _loadPatients() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     loggedInUser = prefs.getString('loggedInUser') ?? '';
-    List<String> storedPatients = prefs.getStringList('patients_$loggedInUser') ?? [];
+    List<String> storedPatients =
+        prefs.getStringList('patients_$loggedInUser') ?? [];
     setState(() {
       patients = storedPatients.map((patientJson) {
         return Map<String, String>.from(json.decode(patientJson));
@@ -40,6 +61,7 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
     });
   }
 
+  /// Adds or updates a patient record in SharedPreferences
   Future<void> _addOrUpdatePatient(Map<String, String> patient,
       {bool isEditing = false, int? index}) async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -56,6 +78,7 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
     _loadPatients();
   }
 
+  /// Deletes a patient from SharedPreferences
   Future<void> _deletePatient(int index) async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     List<String> storedPatients =
@@ -65,7 +88,40 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
     _loadPatients();
   }
 
-  // Show subscription details in a bottom sheet with a dropdown for "Free/Premium/Enterprise"
+  /// Fetches beacon data from the Raspberry Pi and updates each patient's status
+  Future<void> fetchBeaconStatus() async {
+    try {
+      final response =
+      await http.get(Uri.parse('http://$serverIp:5000/get_status'));
+
+      if (response.statusCode == 200) {
+        // Parse received data
+        Map<String, String> receivedData =
+        Map<String, String>.from(json.decode(response.body));
+
+        // Update each patient's status based on received data
+        for (var patient in patients) {
+          String mac = patient["rfid"] ?? "";
+          if (receivedData.containsKey(mac)) {
+            patient["status"] = (receivedData[mac] == "IN_RANGE")
+                ? "IN_RANGE"
+                : "OUT_OF_RANGE";
+          } else {
+            // Default if no data or not recognized
+            patient["status"] = "OUT_OF_RANGE";
+          }
+        }
+
+        setState(() {}); // Refresh UI
+      } else {
+        print('Failed to fetch beacon data: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error fetching beacon data: $e');
+    }
+  }
+
+  /// Shows a bottom sheet for changing the subscription plan
   void _showSubscriptionDetails() {
     showModalBottomSheet(
       context: context,
@@ -92,7 +148,7 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
                   setState(() {
                     subscriptionPlan = newValue!;
                   });
-                  // If you want to persist subscription plan, also store in SharedPreferences here
+                  // If you want to persist subscription plan, do so via SharedPreferences here
                 },
               ),
             ],
@@ -102,6 +158,7 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
     );
   }
 
+  /// Navigates to the detailed patient view
   void _viewPatientDetails(Map<String, String> patient, int index) {
     Navigator.push(
       context,
@@ -121,6 +178,7 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
     );
   }
 
+  /// Shows a dialog for adding or editing a patient
   void _showAddOrEditPatientDialog({Map<String, String>? patient, int? index}) {
     final TextEditingController nameController =
     TextEditingController(text: patient?['name'] ?? "");
@@ -201,6 +259,7 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
     );
   }
 
+  /// Builds the main scaffold for the Caregiver Dashboard
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -242,7 +301,6 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
                 );
               },
             ),
-            // Subscription Details BELOW Logout
             ListTile(
               title: Text("Subscription"),
               leading: Icon(Icons.subscriptions),
@@ -261,9 +319,12 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
           return ListTile(
             title: Text(patient["name"] ?? "Unknown"),
             subtitle: Text("Status: ${patient["status"] ?? "Unknown"}"),
-            trailing: patient["status"] == "Out of Range"
+            // Merge logic: If "IN_RANGE", show green; else red.
+            trailing: (patient["status"] == "IN_RANGE")
+                ? Icon(Icons.check_circle, color: Colors.green)
+                : (patient["status"] == "OUT_OF_RANGE")
                 ? Icon(Icons.warning, color: Colors.red)
-                : Icon(Icons.check_circle, color: Colors.green),
+                : Icon(Icons.help, color: Colors.grey),
             onTap: () => _viewPatientDetails(patient, index),
           );
         },
@@ -276,6 +337,8 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
   }
 }
 
+/// A separate screen to show detailed patient information,
+/// including a heart-rate graph, oxygen saturation, etc.
 class PatientDetailsScreen extends StatelessWidget {
   final Map<String, String> patient;
   final VoidCallback onDelete;
@@ -290,8 +353,9 @@ class PatientDetailsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final random = Random();
-    final oxygenSaturation = 95 + random.nextInt(6);  // 95 to 100
-    final respiratoryRate = 12 + random.nextInt(9);   // 12 to 20
+    final oxygenSaturation = 95 + random.nextInt(6); // 95 to 100
+    final respiratoryRate = 12 + random.nextInt(9);  // 12 to 20
+
     return Scaffold(
       appBar: AppBar(
         title: Text("Patient Details"),
@@ -300,6 +364,7 @@ class PatientDetailsScreen extends StatelessWidget {
             onSelected: (value) {
               if (value == "Delete") {
                 onDelete();
+                // Popping once more to go back to the list after deletion.
                 Navigator.pop(context);
               } else if (value == "Edit") {
                 onEdit();
@@ -314,110 +379,141 @@ class PatientDetailsScreen extends StatelessWidget {
       ),
       body: Padding(
         padding: EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text("Name: ${patient["name"]}",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            Text("Age: ${patient["age"]}"),
-            Text("Height: ${patient["height"]}"),
-            Text("Weight: ${patient["weight"]}"),
-            Text("Caregiver Contact: ${patient["caregiver"]}"),
-            Text("RFID Mac Address: ${patient["rfid"]}"),
-            Text("Status: ${patient["status"]}"),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("Name: ${patient["name"]}",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Text("Age: ${patient["age"]}"),
+              Text("Height: ${patient["height"]}"),
+              Text("Weight: ${patient["weight"]}"),
+              Text("Caregiver Contact: ${patient["caregiver"]}"),
+              Text("RFID Mac Address: ${patient["rfid"]}"),
+              Text("Status: ${patient["status"]}"),
+              SizedBox(height: 20),
 
-            Text(
-              "Heart Rate (BPM)",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 10),
-            // Heart Rate Graph
-            Container(
-              height: 250,
-              padding: EdgeInsets.symmetric(horizontal: 10),
-              child: LineChart(
-                LineChartData(
-                  gridData: FlGridData(
-                    show: true,
-                    drawVerticalLine: true,
-                    getDrawingHorizontalLine: (value) {
-                      return FlLine(color: Colors.grey.shade300, strokeWidth: 0.5);
-                    },
-                    getDrawingVerticalLine: (value) {
-                      return FlLine(color: Colors.grey.shade300, strokeWidth: 0.5);
-                    },
-                  ),
-                  titlesData: FlTitlesData(
-                    leftTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 40,
-                        getTitlesWidget: (value, meta) {
-                          return Text(
-                            value.toInt().toString(),
-                            style: TextStyle(fontSize: 10),
-                          );
-                        },
+              Text(
+                "Heart Rate (BPM)",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 10),
+              // Heart Rate Graph
+              Container(
+                height: 250,
+                padding: EdgeInsets.symmetric(horizontal: 10),
+                child: LineChart(
+                  LineChartData(
+                    gridData: FlGridData(
+                      show: true,
+                      drawVerticalLine: true,
+                      getDrawingHorizontalLine: (value) {
+                        return FlLine(
+                            color: Colors.grey.shade300, strokeWidth: 0.5);
+                      },
+                      getDrawingVerticalLine: (value) {
+                        return FlLine(
+                            color: Colors.grey.shade300, strokeWidth: 0.5);
+                      },
+                    ),
+                    titlesData: FlTitlesData(
+                      leftTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          reservedSize: 40,
+                          getTitlesWidget: (value, meta) {
+                            return Text(
+                              value.toInt().toString(),
+                              style: TextStyle(fontSize: 10),
+                            );
+                          },
+                        ),
                       ),
-                    ),
-                    bottomTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 22,
-                        getTitlesWidget: (value, meta) {
-                          return Text(
-                            value.toInt().toString(),
-                            style: TextStyle(fontSize: 10),
-                          );
-                        },
+                      bottomTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          reservedSize: 22,
+                          getTitlesWidget: (value, meta) {
+                            return Text(
+                              value.toInt().toString(),
+                              style: TextStyle(fontSize: 10),
+                            );
+                          },
+                        ),
                       ),
+                      rightTitles:
+                      AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      topTitles:
+                      AxisTitles(sideTitles: SideTitles(showTitles: false)),
                     ),
-                    rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  ),
-                  borderData: FlBorderData(
-                    show: true,
-                    border: Border.all(color: Colors.black, width: 1),
-                  ),
-                  lineBarsData: [
-                    LineChartBarData(
-                      spots: [
-                        FlSpot(0, 100), FlSpot(1, 105), FlSpot(2, 110),
-                        FlSpot(3, 120), FlSpot(4, 140), FlSpot(5, 130),
-                        FlSpot(6, 140), FlSpot(7, 120), FlSpot(8, 110),
-                        FlSpot(9, 110), FlSpot(10, 105), FlSpot(11, 110),
-                        FlSpot(12, 100), FlSpot(13, 105), FlSpot(14, 110),
-                        FlSpot(15, 120), FlSpot(16, 140), FlSpot(17, 130),
-                        FlSpot(18, 140), FlSpot(19, 120), FlSpot(20, 110),
-                        FlSpot(21, 110), FlSpot(22, 105), FlSpot(23, 110),
-                        FlSpot(24, 110), FlSpot(25, 105), FlSpot(26, 110),
-                        FlSpot(27, 100), FlSpot(28, 105), FlSpot(29, 110),
-                        FlSpot(30, 120), FlSpot(31, 140), FlSpot(32, 130),
-                        FlSpot(33, 140), FlSpot(34, 120), FlSpot(35, 110),
-                        FlSpot(36, 110), FlSpot(37, 105), FlSpot(38, 110),
-                      ],
-                      isCurved: true,
-                      color: Colors.red,
-                      barWidth: 3,
-                      isStrokeCapRound: true,
-                      belowBarData: BarAreaData(show: false),
+                    borderData: FlBorderData(
+                      show: true,
+                      border: Border.all(color: Colors.black, width: 1),
                     ),
-                  ],
+                    lineBarsData: [
+                      LineChartBarData(
+                        spots: [
+                          FlSpot(0, 100),
+                          FlSpot(1, 105),
+                          FlSpot(2, 110),
+                          FlSpot(3, 120),
+                          FlSpot(4, 140),
+                          FlSpot(5, 130),
+                          FlSpot(6, 140),
+                          FlSpot(7, 120),
+                          FlSpot(8, 110),
+                          FlSpot(9, 110),
+                          FlSpot(10, 105),
+                          FlSpot(11, 110),
+                          FlSpot(12, 100),
+                          FlSpot(13, 105),
+                          FlSpot(14, 110),
+                          FlSpot(15, 120),
+                          FlSpot(16, 140),
+                          FlSpot(17, 130),
+                          FlSpot(18, 140),
+                          FlSpot(19, 120),
+                          FlSpot(20, 110),
+                          FlSpot(21, 110),
+                          FlSpot(22, 105),
+                          FlSpot(23, 110),
+                          FlSpot(24, 110),
+                          FlSpot(25, 105),
+                          FlSpot(26, 110),
+                          FlSpot(27, 100),
+                          FlSpot(28, 105),
+                          FlSpot(29, 110),
+                          FlSpot(30, 120),
+                          FlSpot(31, 140),
+                          FlSpot(32, 130),
+                          FlSpot(33, 140),
+                          FlSpot(34, 120),
+                          FlSpot(35, 110),
+                          FlSpot(36, 110),
+                          FlSpot(37, 105),
+                          FlSpot(38, 110),
+                        ],
+                        isCurved: true,
+                        color: Colors.red,
+                        barWidth: 3,
+                        isStrokeCapRound: true,
+                        belowBarData: BarAreaData(show: false),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            SizedBox(height: 20),
-            // Oxygen saturation
-            Text(
-              "Oxygen Saturation: $oxygenSaturation%",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            // Respiratory rate
-            Text(
-              "Respiratory Rate: $respiratoryRate breaths/min",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-          ],
+              SizedBox(height: 20),
+              Text(
+                "Oxygen Saturation: $oxygenSaturation%",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              Text(
+                "Respiratory Rate: $respiratoryRate breaths/min",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
         ),
       ),
     );
