@@ -24,6 +24,9 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
     LiveFeedScreen()
   ];
 
+  // A simple subscription plan state (default to 'Free' or any)
+  String subscriptionPlan = "Free";
+
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
@@ -45,10 +48,49 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
     );
   }
 
+  // Show subscription details in a bottom sheet
+  void _showSubscriptionDetails() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Subscription Plan",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              DropdownButton<String>(
+                value: subscriptionPlan,
+                items: ["Free", "Premium", "Enterprise"].map((String value) {
+                  return DropdownMenuItem<String>(
+                    value: value,
+                    child: Text(value),
+                  );
+                }).toList(),
+                onChanged: (newValue) {
+                  setState(() {
+                    subscriptionPlan = newValue!;
+                  });
+                  // Optionally, persist to SharedPreferences if desired
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("Doctor Dashboard")),
+      appBar: AppBar(
+        title: Text("Doctor Dashboard"),
+      ),
       body: _pages[_selectedIndex],
       drawer: Drawer(
         child: ListView(
@@ -67,6 +109,12 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
                   ),
                 );
               },
+            ),
+            // Subscription Details BELOW Settings
+            ListTile(
+              title: Text("Subscription"),
+              leading: Icon(Icons.subscriptions),
+              onTap: _showSubscriptionDetails,
             ),
             ListTile(
               title: Text("Logout"),

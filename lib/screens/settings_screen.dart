@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'login_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final Function(bool) onThemeChanged;
@@ -16,7 +15,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
-  String subscriptionPlan = "Free";
+
   String loggedInUser = "";
   bool isEditing = false;
   bool isDarkMode = false;
@@ -34,7 +33,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _nameController.text = prefs.getString('user_${loggedInUser}_name') ?? '';
       _emailController.text = prefs.getString('user_${loggedInUser}_email') ?? '';
       _phoneController.text = prefs.getString('user_${loggedInUser}_phone') ?? '';
-      subscriptionPlan = prefs.getString('user_${loggedInUser}_subscription') ?? 'Free';
       isDarkMode = prefs.getBool('isDarkTheme') ?? false;
     });
   }
@@ -44,26 +42,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await prefs.setString('user_${loggedInUser}_name', _nameController.text);
     await prefs.setString('user_${loggedInUser}_email', _emailController.text);
     await prefs.setString('user_${loggedInUser}_phone', _phoneController.text);
-    await prefs.setString('user_${loggedInUser}_subscription', subscriptionPlan);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Settings Saved")));
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Settings Saved")),
+    );
     setState(() {
       isEditing = false;
     });
-  }
-
-  Future<void> _logout() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.remove('loggedInUser');
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(
-        builder: (_) => LoginScreen(
-          onThemeChanged: widget.onThemeChanged,
-          isDarkTheme: isDarkMode,
-        ),
-      ),
-          (route) => false,
-    );
   }
 
   void _toggleTheme(bool value) async {
@@ -97,7 +82,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   ListTile(
-                    title: Text("Account Details", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    title: Text(
+                      "Account Details",
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
                     trailing: IconButton(
                       icon: Icon(Icons.edit),
                       onPressed: () {
@@ -107,11 +95,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                     ),
                   ),
-                  TextField(controller: _nameController, decoration: InputDecoration(labelText: "Full Name"), enabled: isEditing),
-                  TextField(controller: _emailController, decoration: InputDecoration(labelText: "Email"), enabled: isEditing),
-                  TextField(controller: _phoneController, decoration: InputDecoration(labelText: "Phone Number"), enabled: isEditing),
+                  TextField(
+                    controller: _nameController,
+                    decoration: InputDecoration(labelText: "Full Name"),
+                    enabled: isEditing,
+                  ),
+                  TextField(
+                    controller: _emailController,
+                    decoration: InputDecoration(labelText: "Email"),
+                    enabled: isEditing,
+                  ),
+                  TextField(
+                    controller: _phoneController,
+                    decoration: InputDecoration(labelText: "Phone Number"),
+                    enabled: isEditing,
+                  ),
                   if (isEditing)
-                    ElevatedButton(onPressed: _saveUserData, child: Text("Save Changes")),
+                    ElevatedButton(
+                      onPressed: _saveUserData,
+                      child: Text("Save Changes"),
+                    ),
                 ],
               ),
             );
@@ -121,35 +124,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _showSubscriptionDetails() {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) {
-        return Padding(
-          padding: EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text("Subscription Plan", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              DropdownButton<String>(
-                value: subscriptionPlan,
-                items: ["Free", "Premium", "Enterprise"].map((String value) {
-                  return DropdownMenuItem<String>(value: value, child: Text(value));
-                }).toList(),
-                onChanged: (newValue) => setState(() => subscriptionPlan = newValue!),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("Settings")),
+      appBar: AppBar(
+        title: Text("Settings"),
+      ),
       body: ListView(
         children: [
           _buildSettingsItem("Account Details", Icons.person, _showAccountDetails),
@@ -158,9 +138,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             value: isDarkMode,
             onChanged: _toggleTheme,
           ),
-          _buildSettingsItem("Subscription Details", Icons.subscriptions, _showSubscriptionDetails),
-          Divider(),
-          _buildSettingsItem("Logout", Icons.logout, _logout),
         ],
       ),
     );

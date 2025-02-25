@@ -1,3 +1,4 @@
+import 'dart:math'; // for Random()
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
@@ -31,9 +32,11 @@ class _PatientsScreenState extends State<PatientsScreen> {
     });
   }
 
-  Future<void> _addOrUpdatePatient(Map<String, String> patient, {bool isEditing = false, int? index}) async {
+  Future<void> _addOrUpdatePatient(Map<String, String> patient,
+      {bool isEditing = false, int? index}) async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    List<String> storedPatients = prefs.getStringList('patients_$loggedInUser') ?? [];
+    List<String> storedPatients =
+        prefs.getStringList('patients_$loggedInUser') ?? [];
 
     if (isEditing && index != null) {
       storedPatients[index] = json.encode(patient);
@@ -47,19 +50,26 @@ class _PatientsScreenState extends State<PatientsScreen> {
 
   Future<void> _deletePatient(int index) async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    List<String> storedPatients = prefs.getStringList('patients_$loggedInUser') ?? [];
+    List<String> storedPatients =
+        prefs.getStringList('patients_$loggedInUser') ?? [];
     storedPatients.removeAt(index);
     await prefs.setStringList('patients_$loggedInUser', storedPatients);
     _loadPatients();
   }
 
   void _showAddOrEditPatientDialog({Map<String, String>? patient, int? index}) {
-    final TextEditingController nameController = TextEditingController(text: patient?['name'] ?? "");
-    final TextEditingController ageController = TextEditingController(text: patient?['age'] ?? "");
-    final TextEditingController heightController = TextEditingController(text: patient?['height'] ?? "");
-    final TextEditingController weightController = TextEditingController(text: patient?['weight'] ?? "");
-    final TextEditingController caregiverController = TextEditingController(text: patient?['caregiver'] ?? "");
-    final TextEditingController rfidController = TextEditingController(text: patient?['rfid'] ?? "");
+    final TextEditingController nameController =
+    TextEditingController(text: patient?['name'] ?? "");
+    final TextEditingController ageController =
+    TextEditingController(text: patient?['age'] ?? "");
+    final TextEditingController heightController =
+    TextEditingController(text: patient?['height'] ?? "");
+    final TextEditingController weightController =
+    TextEditingController(text: patient?['weight'] ?? "");
+    final TextEditingController caregiverController =
+    TextEditingController(text: patient?['caregiver'] ?? "");
+    final TextEditingController rfidController =
+    TextEditingController(text: patient?['rfid'] ?? "");
 
     showDialog(
       context: context,
@@ -152,10 +162,19 @@ class PatientDetailsScreen extends StatelessWidget {
   final VoidCallback onDelete;
   final VoidCallback onEdit;
 
-  PatientDetailsScreen({required this.patient, required this.onDelete, required this.onEdit});
+  PatientDetailsScreen({
+    required this.patient,
+    required this.onDelete,
+    required this.onEdit,
+  });
 
   @override
   Widget build(BuildContext context) {
+    // Generate random oxygen saturation in [95..100], respiratory rate in [12..20]
+    final random = Random();
+    final oxygenSaturation = 95 + random.nextInt(6);  // 95 to 100
+    final respiratoryRate = 12 + random.nextInt(9);   // 12 to 20
+
     return Scaffold(
       appBar: AppBar(
         title: Text("Patient Details"),
@@ -188,6 +207,7 @@ class PatientDetailsScreen extends StatelessWidget {
             Text("Caregiver Contact: ${patient["caregiver"]}"),
             Text("Device Mac Address: ${patient["rfid"]}"),
 
+            SizedBox(height: 20),
             // Heart Rate Title
             Text(
               "Heart Rate (BPM)",
@@ -269,6 +289,18 @@ class PatientDetailsScreen extends StatelessWidget {
                   ],
                 ),
               ),
+            ),
+
+            SizedBox(height: 20),
+            // Oxygen saturation
+            Text(
+              "Oxygen Saturation: $oxygenSaturation%",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            // Respiratory rate
+            Text(
+              "Respiratory Rate: $respiratoryRate breaths/min",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
           ],
         ),
