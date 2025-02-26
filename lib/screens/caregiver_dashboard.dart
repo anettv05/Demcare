@@ -7,6 +7,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'dart:math';
 import 'settings_screen.dart';
 import 'login_screen.dart';
+import 'memory_test_screen.dart'; // Import the memory test screen
 
 class CaregiverDashboard extends StatefulWidget {
   final Function(bool) onThemeChanged;
@@ -48,12 +49,11 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
     super.dispose();
   }
 
-  /// Loads saved patient data from SharedPreferences
+  /// Loads saved patient data from SharedPreferences.
   Future<void> _loadPatients() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     loggedInUser = prefs.getString('loggedInUser') ?? '';
-    List<String> storedPatients =
-        prefs.getStringList('patients_$loggedInUser') ?? [];
+    List<String> storedPatients = prefs.getStringList('patients_$loggedInUser') ?? [];
     setState(() {
       patients = storedPatients.map((patientJson) {
         return Map<String, String>.from(json.decode(patientJson));
@@ -61,57 +61,42 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
     });
   }
 
-  /// Adds or updates a patient record in SharedPreferences
-  Future<void> _addOrUpdatePatient(Map<String, String> patient,
-      {bool isEditing = false, int? index}) async {
+  /// Adds or updates a patient record in SharedPreferences.
+  Future<void> _addOrUpdatePatient(Map<String, String> patient, {bool isEditing = false, int? index}) async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    List<String> storedPatients =
-        prefs.getStringList('patients_$loggedInUser') ?? [];
-
+    List<String> storedPatients = prefs.getStringList('patients_$loggedInUser') ?? [];
     if (isEditing && index != null) {
       storedPatients[index] = json.encode(patient);
     } else {
       storedPatients.add(json.encode(patient));
     }
-
     await prefs.setStringList('patients_$loggedInUser', storedPatients);
     _loadPatients();
   }
 
-  /// Deletes a patient from SharedPreferences
+  /// Deletes a patient from SharedPreferences.
   Future<void> _deletePatient(int index) async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    List<String> storedPatients =
-        prefs.getStringList('patients_$loggedInUser') ?? [];
+    List<String> storedPatients = prefs.getStringList('patients_$loggedInUser') ?? [];
     storedPatients.removeAt(index);
     await prefs.setStringList('patients_$loggedInUser', storedPatients);
     _loadPatients();
   }
 
-  /// Fetches beacon data from the Raspberry Pi and updates each patient's status
+  /// Fetches beacon data from the Raspberry Pi and updates each patient's status.
   Future<void> fetchBeaconStatus() async {
     try {
-      final response =
-      await http.get(Uri.parse('http://$serverIp:5000/get_status'));
-
+      final response = await http.get(Uri.parse('http://$serverIp:5000/get_status'));
       if (response.statusCode == 200) {
-        // Parse received data
-        Map<String, String> receivedData =
-        Map<String, String>.from(json.decode(response.body));
-
-        // Update each patient's status based on received data
+        Map<String, String> receivedData = Map<String, String>.from(json.decode(response.body));
         for (var patient in patients) {
           String mac = patient["rfid"] ?? "";
           if (receivedData.containsKey(mac)) {
-            patient["status"] = (receivedData[mac] == "IN_RANGE")
-                ? "IN_RANGE"
-                : "OUT_OF_RANGE";
+            patient["status"] = (receivedData[mac] == "IN_RANGE") ? "IN_RANGE" : "OUT_OF_RANGE";
           } else {
-            // Default if no data or not recognized
             patient["status"] = "OUT_OF_RANGE";
           }
         }
-
         setState(() {}); // Refresh UI
       } else {
         print('Failed to fetch beacon data: ${response.statusCode}');
@@ -121,7 +106,7 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
     }
   }
 
-  /// Shows a bottom sheet for changing the subscription plan
+  /// Shows a bottom sheet for changing the subscription plan.
   void _showSubscriptionDetails() {
     showModalBottomSheet(
       context: context,
@@ -132,23 +117,16 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                "Subscription Plan",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
+              Text("Subscription Plan", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               DropdownButton<String>(
                 value: subscriptionPlan,
                 items: ["Free", "Premium", "Enterprise"].map((String value) {
-                  return DropdownMenuItem<String>(
-                    value: value,
-                    child: Text(value),
-                  );
+                  return DropdownMenuItem<String>(value: value, child: Text(value));
                 }).toList(),
                 onChanged: (newValue) {
                   setState(() {
                     subscriptionPlan = newValue!;
                   });
-                  // If you want to persist subscription plan, do so via SharedPreferences here
                 },
               ),
             ],
@@ -158,13 +136,14 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
     );
   }
 
-  /// Navigates to the detailed patient view
+  /// Navigates to the detailed patient view.
   void _viewPatientDetails(Map<String, String> patient, int index) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => PatientDetailsScreen(
           patient: patient,
+          patientIndex: index,
           onDelete: () {
             _deletePatient(index);
             Navigator.pop(context);
@@ -173,26 +152,24 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
             Navigator.pop(context);
             _showAddOrEditPatientDialog(patient: patient, index: index);
           },
+          onMemoryTestComplete: (String result) async {
+            // Update patient's memory_test_result then store in local data.
+            patient['memory_test_result'] = result;
+            await _addOrUpdatePatient(patient, isEditing: true, index: index);
+          },
         ),
       ),
     );
   }
 
-  /// Shows a dialog for adding or editing a patient
+  /// Shows a dialog for adding or editing a patient.
   void _showAddOrEditPatientDialog({Map<String, String>? patient, int? index}) {
-    final TextEditingController nameController =
-    TextEditingController(text: patient?['name'] ?? "");
-    final TextEditingController ageController =
-    TextEditingController(text: patient?['age'] ?? "");
-    final TextEditingController heightController =
-    TextEditingController(text: patient?['height'] ?? "");
-    final TextEditingController weightController =
-    TextEditingController(text: patient?['weight'] ?? "");
-    final TextEditingController caregiverController =
-    TextEditingController(text: patient?['caregiver'] ?? "");
-    final TextEditingController rfidController =
-    TextEditingController(text: patient?['rfid'] ?? "");
-
+    final TextEditingController nameController = TextEditingController(text: patient?['name'] ?? "");
+    final TextEditingController ageController = TextEditingController(text: patient?['age'] ?? "");
+    final TextEditingController heightController = TextEditingController(text: patient?['height'] ?? "");
+    final TextEditingController weightController = TextEditingController(text: patient?['weight'] ?? "");
+    final TextEditingController caregiverController = TextEditingController(text: patient?['caregiver'] ?? "");
+    final TextEditingController rfidController = TextEditingController(text: patient?['rfid'] ?? "");
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -200,39 +177,17 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
         content: SingleChildScrollView(
           child: Column(
             children: [
-              TextField(
-                controller: nameController,
-                decoration: InputDecoration(labelText: "Name"),
-              ),
-              TextField(
-                controller: ageController,
-                decoration: InputDecoration(labelText: "Age"),
-                keyboardType: TextInputType.number,
-              ),
-              TextField(
-                controller: heightController,
-                decoration: InputDecoration(labelText: "Height"),
-              ),
-              TextField(
-                controller: weightController,
-                decoration: InputDecoration(labelText: "Weight"),
-              ),
-              TextField(
-                controller: caregiverController,
-                decoration: InputDecoration(labelText: "Caregiver Contact"),
-              ),
-              TextField(
-                controller: rfidController,
-                decoration: InputDecoration(labelText: "RFID Mac Address"),
-              ),
+              TextField(controller: nameController, decoration: InputDecoration(labelText: "Name")),
+              TextField(controller: ageController, decoration: InputDecoration(labelText: "Age"), keyboardType: TextInputType.number),
+              TextField(controller: heightController, decoration: InputDecoration(labelText: "Height")),
+              TextField(controller: weightController, decoration: InputDecoration(labelText: "Weight")),
+              TextField(controller: caregiverController, decoration: InputDecoration(labelText: "Caregiver Contact")),
+              TextField(controller: rfidController, decoration: InputDecoration(labelText: "RFID Mac Address")),
             ],
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text("Cancel"),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text("Cancel")),
           ElevatedButton(
             onPressed: () {
               Map<String, String> newPatient = {
@@ -242,14 +197,10 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
                 "weight": weightController.text,
                 "caregiver": caregiverController.text,
                 "rfid": rfidController.text,
-                // Keep status if editing; if adding, default to "Unknown"
                 "status": patient?['status'] ?? "Unknown",
+                "memory_test_result": patient?['memory_test_result'] ?? "",
               };
-              _addOrUpdatePatient(
-                newPatient,
-                isEditing: patient != null,
-                index: index,
-              );
+              _addOrUpdatePatient(newPatient, isEditing: patient != null, index: index);
               Navigator.pop(context);
             },
             child: Text(patient == null ? "Add" : "Save"),
@@ -259,13 +210,11 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
     );
   }
 
-  /// Builds the main scaffold for the Caregiver Dashboard
+  /// Builds the main scaffold for the Caregiver Dashboard.
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text("Caregiver Dashboard"),
-      ),
+      appBar: AppBar(title: Text("Caregiver Dashboard")),
       drawer: Drawer(
         child: ListView(
           children: [
@@ -275,12 +224,7 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (context) => SettingsScreen(
-                      onThemeChanged: widget.onThemeChanged,
-                      isDarkTheme: widget.isDarkTheme,
-                    ),
-                  ),
+                  MaterialPageRoute(builder: (context) => SettingsScreen(onThemeChanged: widget.onThemeChanged, isDarkTheme: widget.isDarkTheme)),
                 );
               },
             ),
@@ -292,12 +236,7 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
                 await prefs.remove('loggedInUser');
                 Navigator.pushReplacement(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => LoginScreen(
-                      onThemeChanged: widget.onThemeChanged,
-                      isDarkTheme: widget.isDarkTheme,
-                    ),
-                  ),
+                  MaterialPageRoute(builder: (_) => LoginScreen(onThemeChanged: widget.onThemeChanged, isDarkTheme: widget.isDarkTheme)),
                 );
               },
             ),
@@ -319,7 +258,6 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
           return ListTile(
             title: Text(patient["name"] ?? "Unknown"),
             subtitle: Text("Status: ${patient["status"] ?? "Unknown"}"),
-            // Merge logic: If "IN_RANGE", show green; else red.
             trailing: (patient["status"] == "IN_RANGE")
                 ? Icon(Icons.check_circle, color: Colors.green)
                 : (patient["status"] == "OUT_OF_RANGE")
@@ -337,25 +275,48 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
   }
 }
 
-/// A separate screen to show detailed patient information,
-/// including a heart-rate graph, oxygen saturation, etc.
-class PatientDetailsScreen extends StatelessWidget {
+/// Updated PatientDetailsScreen as a StatefulWidget that auto-refreshes to show the latest memory test score.
+class PatientDetailsScreen extends StatefulWidget {
   final Map<String, String> patient;
+  final int patientIndex;
   final VoidCallback onDelete;
   final VoidCallback onEdit;
+  final ValueChanged<String> onMemoryTestComplete;
 
   PatientDetailsScreen({
     required this.patient,
+    required this.patientIndex,
     required this.onDelete,
     required this.onEdit,
+    required this.onMemoryTestComplete,
   });
+
+  @override
+  _PatientDetailsScreenState createState() => _PatientDetailsScreenState();
+}
+
+class _PatientDetailsScreenState extends State<PatientDetailsScreen> {
+  late String memoryTestResult;
+
+  @override
+  void initState() {
+    super.initState();
+    memoryTestResult = widget.patient['memory_test_result'] ?? '';
+  }
+
+  void _updateMemoryTestResult(String result) {
+    setState(() {
+      memoryTestResult = result;
+    });
+    widget.patient['memory_test_result'] = result;
+    widget.onMemoryTestComplete(result);
+  }
 
   @override
   Widget build(BuildContext context) {
     final random = Random();
-    final oxygenSaturation = 95 + random.nextInt(6); // 95 to 100
-    final respiratoryRate = 12 + random.nextInt(9);  // 12 to 20
-
+    final oxygenSaturation = 95 + random.nextInt(6);
+    final respiratoryRate = 12 + random.nextInt(9);
     return Scaffold(
       appBar: AppBar(
         title: Text("Patient Details"),
@@ -363,11 +324,10 @@ class PatientDetailsScreen extends StatelessWidget {
           PopupMenuButton<String>(
             onSelected: (value) {
               if (value == "Delete") {
-                onDelete();
-                // Popping once more to go back to the list after deletion.
+                widget.onDelete();
                 Navigator.pop(context);
               } else if (value == "Edit") {
-                onEdit();
+                widget.onEdit();
               }
             },
             itemBuilder: (BuildContext context) => [
@@ -383,22 +343,17 @@ class PatientDetailsScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text("Name: ${patient["name"]}",
+              Text("Name: ${widget.patient["name"]}",
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              Text("Age: ${patient["age"]}"),
-              Text("Height: ${patient["height"]}"),
-              Text("Weight: ${patient["weight"]}"),
-              Text("Caregiver Contact: ${patient["caregiver"]}"),
-              Text("RFID Mac Address: ${patient["rfid"]}"),
-              Text("Status: ${patient["status"]}"),
+              Text("Age: ${widget.patient["age"]}"),
+              Text("Height: ${widget.patient["height"]}"),
+              Text("Weight: ${widget.patient["weight"]}"),
+              Text("Caregiver Contact: ${widget.patient["caregiver"]}"),
+              Text("RFID Mac Address: ${widget.patient["rfid"]}"),
+              Text("Status: ${widget.patient["status"]}"),
               SizedBox(height: 20),
-
-              Text(
-                "Heart Rate (BPM)",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
+              Text("Heart Rate (BPM)", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               SizedBox(height: 10),
-              // Heart Rate Graph
               Container(
                 height: 250,
                 padding: EdgeInsets.symmetric(horizontal: 10),
@@ -407,44 +362,26 @@ class PatientDetailsScreen extends StatelessWidget {
                     gridData: FlGridData(
                       show: true,
                       drawVerticalLine: true,
-                      getDrawingHorizontalLine: (value) {
-                        return FlLine(
-                            color: Colors.grey.shade300, strokeWidth: 0.5);
-                      },
-                      getDrawingVerticalLine: (value) {
-                        return FlLine(
-                            color: Colors.grey.shade300, strokeWidth: 0.5);
-                      },
+                      getDrawingHorizontalLine: (value) => FlLine(color: Colors.grey.shade300, strokeWidth: 0.5),
+                      getDrawingVerticalLine: (value) => FlLine(color: Colors.grey.shade300, strokeWidth: 0.5),
                     ),
                     titlesData: FlTitlesData(
                       leftTitles: AxisTitles(
                         sideTitles: SideTitles(
                           showTitles: true,
                           reservedSize: 40,
-                          getTitlesWidget: (value, meta) {
-                            return Text(
-                              value.toInt().toString(),
-                              style: TextStyle(fontSize: 10),
-                            );
-                          },
+                          getTitlesWidget: (value, meta) => Text(value.toInt().toString(), style: TextStyle(fontSize: 10)),
                         ),
                       ),
                       bottomTitles: AxisTitles(
                         sideTitles: SideTitles(
                           showTitles: true,
                           reservedSize: 22,
-                          getTitlesWidget: (value, meta) {
-                            return Text(
-                              value.toInt().toString(),
-                              style: TextStyle(fontSize: 10),
-                            );
-                          },
+                          getTitlesWidget: (value, meta) => Text(value.toInt().toString(), style: TextStyle(fontSize: 10)),
                         ),
                       ),
-                      rightTitles:
-                      AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                      topTitles:
-                      AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
                     ),
                     borderData: FlBorderData(
                       show: true,
@@ -504,13 +441,35 @@ class PatientDetailsScreen extends StatelessWidget {
                 ),
               ),
               SizedBox(height: 20),
-              Text(
-                "Oxygen Saturation: $oxygenSaturation%",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              Text(
-                "Respiratory Rate: $respiratoryRate breaths/min",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              Text("Oxygen Saturation: $oxygenSaturation%", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              Text("Respiratory Rate: $respiratoryRate breaths/min", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              SizedBox(height: 20),
+              if (memoryTestResult.isNotEmpty) ...[
+                Text("Latest Memory Test Result:", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                Text(memoryTestResult),
+                SizedBox(height: 20),
+              ],
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () async {
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => MemoryTestScreen(
+                        onTestComplete: (String finalResult) {
+                          Navigator.pop(context, finalResult);
+                        },
+                      ),
+                    ),
+                  );
+                  if (result != null) {
+                    _updateMemoryTestResult(result);
+                  }
+                },
+                child: Text("Take Memory Test"),
               ),
             ],
           ),
